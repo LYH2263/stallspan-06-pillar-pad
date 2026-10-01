@@ -30,6 +30,8 @@ class Pillar(Base):
     segment_id: Mapped[int] = mapped_column(ForeignKey("segments.id"))
     position_m: Mapped[float] = mapped_column(Float)
     thickness_m: Mapped[float] = mapped_column(Float, default=0.4)
+    # 厚度之外再登记的外扩米数；0 表示只按厚度（与绿仓相同），负数在入口打回
+    setback_m: Mapped[float] = mapped_column(Float, default=0.0)
     label: Mapped[str] = mapped_column(String(32), default="挡柱")
 
 class AllocationRun(Base):

@@ -9,23 +9,32 @@ onMounted(async () => {
   await run()
 })
 const colors = ['#e8a87c','#85dcb8','#e27d60','#c38d9e','#41b3a3','#f4a261','#e76f51']
+// 主图只消费引擎结果：禁入带 / 摊位 / 空隙来自同一次运行的同一口径（厚度半宽 + 外扩），
+// 图上柱侧空白端点与引擎禁入端点因此必然同数；前端不另算第二条口径
 const cells = computed(() => {
   if (!data.value) return []
   const width = data.value.segment.width_m
   const out: any[] = []
-  for (const p of data.value.pillars || []) {
-    out.push({ type: 'pillar', start: p.position_m - p.thickness_m/2, w: p.thickness_m, label: p.label || '挡柱' })
+  for (const b of data.value.blocked || []) {
+    out.push({ type: 'pillar', start: b.start_m, end: b.end_m, label: '挡柱禁入带' })
   }
   for (const [i, p] of (data.value.placements || []).entries()) {
-    out.push({ type: 'stall', start: p.start_m, w: p.width_m, label: p.vendor_name, color: colors[i % colors.length] })
+    out.push({ type: 'stall', start: p.start_m, end: p.end_m, label: p.vendor_name, color: colors[i % colors.length] })
   }
-  return out.sort((a,b) => a.start - b.start).map(c => ({ ...c, pct: Math.max((c.w / width) * 100, 2) }))
+  for (const s of data.value.free_spans || []) {
+    out.push({ type: 'gap', start: s.start_m, end: s.end_m, label: '空' })
+  }
+  return out.map(c => ({
+    ...c,
+    left: (c.start / width) * 100,
+    pct: ((c.end - c.start) / width) * 100,
+  }))
 })
 </script>
 <template>
   <div class="ss-street-wrap">
     <h1>街段分配带</h1>
-    <p class="sub">沿街一维开间 · 挡柱为竖直阻断 · 底部为摊主排队</p>
+    <p class="sub">沿街一维开间 · 禁入带 = 厚度半宽 + 外扩 · 底部为摊主排队</p>
     <button class="btn" @click="run">重新分配</button>
     <div class="ss-band-ruler" v-if="data">
       <span>0 m</span>
@@ -37,8 +46,8 @@ const cells = computed(() => {
         <div
           v-for="(c,i) in cells" :key="i"
           class="ss-band-cell"
-          :class="{ 'ss-pillar': c.type === 'pillar' }"
-          :style="{ width: c.pct + '%', background: c.type === 'pillar' ? undefined : c.color, flex: '0 0 ' + c.pct + '%' }"
+          :class="{ 'ss-pillar': c.type === 'pillar', 'ss-gap': c.type === 'gap' }"
+          :style="{ position: 'absolute', left: c.left + '%', width: c.pct + '%', background: c.type === 'stall' ? c.color : undefined }"
         >{{ c.label }}</div>
       </div>
     </div>
