@@ -1,47 +1,38 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { api } from '../api'
+import BlockedBand from '../components/BlockedBand.vue'
 const data = ref<any>(null)
 const vendors = ref<any[]>([])
-async function run() { data.value = await api('/allocate/run?segment_id=1', { method: 'POST' }) }
+const runId = ref<number | null>(null)
+async function run() {
+  const r = await api('/allocate/run?segment_id=1', { method: 'POST' })
+  // 重新分配：整页只认本次提交瞬间算出的 blocked_zones（含最新外扩）
+  data.value = r
+  runId.value = r.id
+}
 onMounted(async () => {
   vendors.value = await api('/vendors')
   await run()
-})
-const colors = ['#e8a87c','#85dcb8','#e27d60','#c38d9e','#41b3a3','#f4a261','#e76f51']
-const cells = computed(() => {
-  if (!data.value) return []
-  const width = data.value.segment.width_m
-  const out: any[] = []
-  for (const p of data.value.pillars || []) {
-    out.push({ type: 'pillar', start: p.position_m - p.thickness_m/2, w: p.thickness_m, label: p.label || '挡柱' })
-  }
-  for (const [i, p] of (data.value.placements || []).entries()) {
-    out.push({ type: 'stall', start: p.start_m, w: p.width_m, label: p.vendor_name, color: colors[i % colors.length] })
-  }
-  return out.sort((a,b) => a.start - b.start).map(c => ({ ...c, pct: Math.max((c.w / width) * 100, 2) }))
 })
 </script>
 <template>
   <div class="ss-street-wrap">
     <h1>街段分配带</h1>
-    <p class="sub">沿街一维开间 · 挡柱为竖直阻断 · 底部为摊主排队</p>
-    <button class="btn" @click="run">重新分配</button>
-    <div class="ss-band-ruler" v-if="data">
-      <span>0 m</span>
-      <span>{{ data.segment.name }} · {{ data.segment.width_m }} m</span>
-      <span>{{ data.segment.width_m }} m</span>
+    <p class="sub">沿街一维开间 · 深色柱芯为挡柱厚度，橙色斜纹为厚度半宽＋外扩的连续禁入带 · 底部为摊主排队</p>
+    <div>
+      <button class="btn" @click="run">重新分配</button>
+      <span v-if="runId" class="muted" style="margin-left:0.6rem">运行快照 #{{ runId }}</span>
     </div>
-    <div class="ss-street-band" v-if="data">
-      <div class="ss-street-inner">
-        <div
-          v-for="(c,i) in cells" :key="i"
-          class="ss-band-cell"
-          :class="{ 'ss-pillar': c.type === 'pillar' }"
-          :style="{ width: c.pct + '%', background: c.type === 'pillar' ? undefined : c.color, flex: '0 0 ' + c.pct + '%' }"
-        >{{ c.label }}</div>
+    <template v-if="data">
+      <div class="ss-band-ruler">
+        <span>0 m</span>
+        <span>{{ data.segment.name }} · {{ data.segment.width_m }} m</span>
+        <span>{{ data.segment.width_m }} m</span>
       </div>
-    </div>
+      <!-- 柱侧空白端点与引擎禁入端点同源：直接画 run 快照里的 blocked_zones -->
+      <BlockedBand :width-m="data.segment.width_m" :zones="data.blocked_zones || []" :placements="data.placements || []" />
+    </template>
     <div class="ss-vendor-queue">
       <div v-for="v in vendors" :key="v.id" class="ss-vendor-chip">
         <strong>{{ v.name }}</strong>

@@ -12,8 +12,10 @@ router = APIRouter(prefix="/allocate", tags=["allocate"])
 def run_allocate(segment_id: int = 1, db: Session = Depends(get_db)):
     seg = db.get(Segment, segment_id)
     if not seg: raise HTTPException(404, "街段不存在")
-    pillars = [{"position_m": p.position_m, "thickness_m": p.thickness_m}
-               for p in db.scalars(select(Pillar).where(Pillar.segment_id == segment_id)).all()]
+    pillars = [{"id": p.id, "position_m": p.position_m, "thickness_m": p.thickness_m,
+                "clearance_m": p.clearance_m, "label": p.label}
+               for p in db.scalars(select(Pillar).where(Pillar.segment_id == segment_id)
+                                   .order_by(Pillar.position_m)).all()]
     vendors = [{"id": v.id, "name": v.name, "stall_width_m": v.stall_width_m, "priority": v.priority}
                for v in db.scalars(select(Vendor).where(Vendor.market_day_id == seg.market_day_id)).all()]
     result = result_to_dict(allocate_first_fit(seg.width_m, vendors, pillars))
